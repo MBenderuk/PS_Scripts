@@ -7,7 +7,14 @@ param(
     $CheckNow = $false,
 
     [Switch]
-    $GenerateJunk = $false
+    $GenerateJunk = $false,
+
+    [validateset("B","KB","MB","GB","TB")]            
+    [string]
+    $Unit,
+
+    [double]
+    $CriticalSize
     )
 
 function get-dir-size {
@@ -16,9 +23,10 @@ function get-dir-size {
     [Parameter(Mandatory = $true)]
     $PathToDir
     )
-    $dir_size = (Get-ChildItem $PathToDir -Recurse | Measure-Object -Sum Length).Sum
-    $dir_size = "$([math]::round($dir_size /1KB, 3)) KB"
-    Write-Host("Size of $PathToDir is $dir_size")
+    $DirSize = (Get-ChildItem $PathToDir -Recurse | Measure-Object -Sum Length).Sum
+    #$DirSize = "$([math]::round($DirSize /1KB, 3)) KB"
+    #Write-Host("Size of $PathToDir is $dir_size")
+    return $DirSize
 }
 
 function generate-junk-files {
@@ -38,12 +46,42 @@ function generate-junk-files {
     }
 }
 
+function del-dir-content {
+    [cmdletbinding()]
+    param(
+    [Parameter(Mandatory = $true)]
+    $PathToDir,
+
+    [int]
+    $CriticalSize
+    )
+    if ((get-dir-size -PathToDir $PathToDir) -gt $CriticalSize) {
+        Write-Host("Directory was cleaned! Removed - $(get-dir-size -PathToDir $PathToDir) Bytes.")
+        Remove-Item -Path "$PathToDir\*.junk" 
+    } else {
+        Write-Host("Nothing to delete! Directory size - $(get-dir-size -PathToDir $PathToDir) Bytes. Critical size - $CriticalSize Bytes.")
+    }
+}
+
+switch($Unit) {            
+    "B" {$CriticalSize = $CriticalSize }            
+    "KB" {$CriticalSize = $CriticalSize * 1024 }            
+    "MB" {$CriticalSize = $CriticalSize * 1024 * 1024}            
+    "GB" {$CriticalSize = $CriticalSize * 1024 * 1024 * 1024}            
+    "TB" {$CriticalSize = $CriticalSize * 1024 * 1024 * 1024 * 1024}            
+}   
+
 if ($GenerateJunk -eq $true) {
     generate-junk-files -PathToDir $PathToDir -NumberOfFiles 10
 }
     
+if ($CheckNow -eq $true) {
+    del-dir-content -PathToDir $PathToDir -CriticalSize $CriticalSize
+}
 
-get-dir-size -PathToDir $PathToDir
+
+
+#get-dir-size -PathToDir $PathToDir
 #generate-junk-files -PathToDir $PathToDir -NumberOfFiles 10
 
 
