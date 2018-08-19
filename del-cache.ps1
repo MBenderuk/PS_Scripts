@@ -79,7 +79,12 @@ if ($CheckNow -eq $true) {
     del-dir-content -PathToDir $PathToDir -CriticalSize $CriticalSize
 }
 
-
+while ($true) {
+    Get-Date
+    del-dir-content -PathToDir $PathToDir -CriticalSize $CriticalSize
+    Write-Host("Sleepeng for 60 seconds. Press Ctrl+C to stop script.")
+    sleep 60
+}
 
 #get-dir-size -PathToDir $PathToDir
 #generate-junk-files -PathToDir $PathToDir -NumberOfFiles 10
