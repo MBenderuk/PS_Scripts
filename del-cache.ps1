@@ -14,7 +14,10 @@ param(
     $Unit,
 
     [double]
-    $CriticalSize
+    $CriticalSize,
+
+    [Switch]
+    $RegisterJob = $False
     )
 
 ## set logfile dir, logfile name, create log file
@@ -51,8 +54,6 @@ function get-dir-size {
     $PathToDir
     )
     $DirSize = (Get-ChildItem $PathToDir -Recurse | Measure-Object -Sum Length).Sum
-    #$DirSize = "$([math]::round($DirSize /1KB, 3)) KB"
-    #Write-Host("Size of $PathToDir is $dir_size")
     return $DirSize
 }
 ## this is a test function. will generate "junk" files in specified directory.
@@ -66,7 +67,7 @@ function generate-junk-files {
     $NumberOfFiles = 5
     )
     
-    log-events -severity INFO -message "Starting to generate JUNK-files." -logfile_full_path $logfile_full_path
+    log-events -severity INFO -message "Starting generate JUNK-files." -logfile_full_path $logfile_full_path
 
     for ($i=0; $i -lt $NumberOfFiles; $i++) {
         $FileName = "$(-join ((48..57) + (97..122) | Get-Random -Count 5 | foreach {[char]$_})).junk "
@@ -89,12 +90,34 @@ function del-dir-content {
     $CriticalSize
     )
     if ((get-dir-size -PathToDir $PathToDir) -gt $CriticalSize) {
-        Write-Host("Directory was cleaned! Removed - $(get-dir-size -PathToDir $PathToDir) Bytes.")
-        Remove-Item -Path "$PathToDir\*.junk" 
+        log-events -severity INFO -message "Directory was cleaned! Removed - $(get-dir-size -PathToDir $PathToDir) Bytes." -logfile_full_path $logfile_full_path 
+        Remove-Item -Path "$PathToDir\*.junk"
     } else {
-        Write-Host("Nothing to delete! Directory size - $(get-dir-size -PathToDir $PathToDir) Bytes. Critical size - $CriticalSize Bytes.")
+        log-events -severity INFO -message ""Nothing to delete! Directory size - $(get-dir-size -PathToDir $PathToDir) Bytes. Critical size - $CriticalSize Bytes."" -logfile_full_path $logfile_full_path 
     }
 }
+
+function register-scheduled-task {
+    param(
+    [Parameter(Mandatory = $true)]
+    $PathToDir
+    )
+    
+    $PathToDir = (Resolve-Path -Path $PathToDir).Path
+    
+    $ScriptPath = "$($myInvocation.PSCommandPath)"
+
+    $Action =  New-ScheduledTaskAction -Execute "powershell.exe" `
+                                       -Argument "-WindowStyle Hidden $ScriptPath -PathToDir $PathToDir"
+
+    $Trigger = New-ScheduledTaskTrigger -Daily -DaysInterval 60 -At 10am
+
+    Register-ScheduledTask -TaskName "TestJob1" -Trigger $Trigger –Action $Action `
+                           -Description "Test job creation" | Out-Null
+    log-events -severity INFO -message "Scheduler job registered." -logfile_full_path $logfile_full_path
+}
+
+
 
 log-events -severity INFO -message "************** Script START **************" -logfile_full_path $logfile_full_path
 
@@ -107,32 +130,38 @@ switch($Unit) {
     "TB" {$CriticalSize = $CriticalSize * 1024 * 1024 * 1024 * 1024}            
 }   
 
+if ($RegisterJob -eq $true) {
+
+    register-scheduled-task -PathToDir $PathToDir
+    log-events -severity INFO -message "************** Script End **************" -logfile_full_path $logfile_full_path
+
+    break
+}
+
 if ($GenerateJunk -eq $true) {
     generate-junk-files -PathToDir $PathToDir -NumberOfFiles 10
-    
+    log-events -severity INFO -message "************** Script End **************" -logfile_full_path $logfile_full_path
+
     break
 }
     
 if ($CheckNow -eq $true) {
     del-dir-content -PathToDir $PathToDir -CriticalSize $CriticalSize
+    log-events -severity INFO -message "************** Script End **************" -logfile_full_path $logfile_full_path
+    
     break
 }
 
 while ($true) {
     Get-Date
+    log-events -severity INFO -message "$(get-date)" -logfile_full_path $logfile_full_path
+    
     del-dir-content -PathToDir $PathToDir -CriticalSize $CriticalSize
+    
+    log-events -severity INFO -message "Sleepeng for 60 seconds." -logfile_full_path $logfile_full_path
+    
     Write-Host("Sleepeng for 60 seconds. Press Ctrl+C to stop script.")
     sleep 60
 }
 
 log-events -severity INFO -message "************** Script End **************" -logfile_full_path $logfile_full_path
-
-#get-dir-size -PathToDir $PathToDir
-#generate-junk-files -PathToDir $PathToDir -NumberOfFiles 10
-
-
-#[math]::round((Get-ChildItem $PathToDir -Recurse | Measure-Object -Sum Length).Sum /1KB, 3) "KB"
-
-#(Get-ChildItem $PathToDir -Recurse | Measure-Object -Sum Length).Sum /1KB
-
-
